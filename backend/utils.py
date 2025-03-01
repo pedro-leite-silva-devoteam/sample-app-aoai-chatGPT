@@ -3,9 +3,10 @@ import json
 import logging
 import requests
 import dataclasses
-
+from opencensus.ext.azure.log_exporter import AzureLogHandler
 from typing import List
 
+# Remove the logging configuration from here
 DEBUG = os.environ.get("DEBUG", "false")
 if DEBUG.lower() == "true":
     logging.basicConfig(level=logging.DEBUG)
@@ -14,6 +15,17 @@ AZURE_SEARCH_PERMITTED_GROUPS_COLUMN = os.environ.get(
     "AZURE_SEARCH_PERMITTED_GROUPS_COLUMN"
 )
 
+# Debug settings
+# DEBUG = os.environ.get("DEBUG", "false")
+# if DEBUG.lower() == "true":
+#     logging.basicConfig(level=logging.DEBUG)
+#     # Add Azure Log Handler
+#     connection_string = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
+#     if connection_string:
+#         logger = logging.getLogger()
+#         logger.addHandler(AzureLogHandler(connection_string=connection_string))
+#     else:
+#         logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING environment variable is not set")
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):

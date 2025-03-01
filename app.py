@@ -5,6 +5,14 @@ import logging
 import uuid
 import httpx
 import asyncio
+from opencensus.ext.azure.log_exporter import AzureLogHandler
+from opencensus.ext.azure.trace_exporter import AzureExporter
+from opencensus.trace.tracer import Tracer
+from opencensus.trace.samplers import ProbabilitySampler
+from opencensus.trace.execution_context import get_opencensus_tracer, set_opencensus_tracer, get_current_span
+# Commenting out metrics exporter to disable performance counters
+# from opencensus.ext.azure import metrics_exporter
+
 from quart import (
     Blueprint,
     Quart,
@@ -13,9 +21,8 @@ from quart import (
     request,
     send_from_directory,
     render_template,
-    current_app,
+    current_app
 )
-
 from openai import AsyncAzureOpenAI
 from azure.identity.aio import (
     DefaultAzureCredential,
@@ -40,13 +47,66 @@ bp = Blueprint("routes", __name__, static_folder="static", template_folder="stat
 
 cosmos_db_ready = asyncio.Event()
 
+# Setup Logging
+def setup_logging():
+    connection_string = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
 
+    if connection_string:
+        handler = AzureLogHandler(connection_string=connection_string)
+        logger.addHandler(handler)
+
+        # Commenting out metrics exporter to disable performance counters
+        # metrics_exporter.new_metrics_exporter(connection_string=connection_string)
+    else:
+        logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING environment variable is not set")
+
+# Setup Tracing (but keep it minimal)
+def setup_tracing():
+    global tracer
+    connection_string = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    
+    if connection_string:
+        tracer = Tracer(
+            exporter=AzureExporter(connection_string=connection_string),
+            sampler=ProbabilitySampler(1.0)
+        )
+        set_opencensus_tracer(tracer)
+    else:
+        logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING is not set. Tracing disabled.")
+
+# Middleware for lightweight tracing
+async def trace_request():
+    tracer = get_opencensus_tracer()
+    if tracer:
+        span = tracer.start_span(name=f"HTTP {request.method} {request.path}")
+        span.add_attribute("http.url", request.url)
+        span.add_attribute("http.method", request.method)
+        set_opencensus_tracer(tracer)  # Ensure the tracer is set in context
+
+async def trace_response(response):
+    tracer = get_opencensus_tracer()
+    if tracer:
+        span = get_current_span()
+        if span:
+            span.add_attribute("http.status_code", response.status_code)
+            tracer.end_span()
+    return response
+
+# Create Quart App
 def create_app():
+    setup_logging()
+    setup_tracing()
+
     app = Quart(__name__)
     app.register_blueprint(bp)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
-    
-    @app.before_serving
+
+    # Attach tracing middleware
+    app.before_request(trace_request)
+    app.after_request(trace_response)
+
     async def init():
         try:
             app.cosmos_conversation_client = await init_cosmosdb_client()
@@ -55,9 +115,30 @@ def create_app():
             logging.exception("Failed to initialize CosmosDB client")
             app.cosmos_conversation_client = None
             raise e
-    
+
+    # Ensure init runs before serving
+    app.before_serving(init)
+
     return app
 
+# Quart Blueprint Route Example (Ensuring Errors are Logged)
+@bp.route("/test")
+async def test_route():
+    logging.info("Handling /test route")
+    return {"message": "Hello, Quart!"}
+
+@bp.route("/error")
+async def error_route():
+    logging.error("This is a simulated error", exc_info=True)
+    raise ValueError("Simulated error")
+
+@bp.route("/exception")
+async def test_exception():
+    try:
+        1 / 0  # This will cause a ZeroDivisionError
+    except Exception as e:
+        logging.exception("Test exception occurred", exc_info=True)
+        return {"error": "An intentional exception occurred"}, 500
 
 @bp.route("/")
 async def index():
@@ -77,11 +158,6 @@ async def favicon():
 async def assets(path):
     return await send_from_directory("static/assets", path)
 
-
-# Debug settings
-DEBUG = os.environ.get("DEBUG", "false")
-if DEBUG.lower() == "true":
-    logging.basicConfig(level=logging.DEBUG)
 
 USER_AGENT = "GitHubSampleWebApp/AsyncAzureOpenAI/1.0.0"
 
@@ -106,10 +182,8 @@ frontend_settings = {
     "oyd_enabled": app_settings.base_settings.datasource_type,
 }
 
-
 # Enable Microsoft Defender for Cloud Integration
 MS_DEFENDER_ENABLED = os.environ.get("MS_DEFENDER_ENABLED", "true").lower() == "true"
-
 
 # Initialize Azure OpenAI Client
 async def init_openai_client():
