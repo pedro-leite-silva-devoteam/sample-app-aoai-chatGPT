@@ -5,13 +5,22 @@ import logging
 import uuid
 import httpx
 import asyncio
-from opencensus.ext.azure.log_exporter import AzureLogHandler
-from opencensus.ext.azure.trace_exporter import AzureExporter
-from opencensus.trace.tracer import Tracer
-from opencensus.trace.samplers import ProbabilitySampler
-from opencensus.trace.execution_context import get_opencensus_tracer, set_opencensus_tracer, get_current_span
-# Commenting out metrics exporter to disable performance counters
-# from opencensus.ext.azure import metrics_exporter
+
+from quart import Quart, request
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter, AzureMonitorLogExporter
+from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk._logs import (
+    LoggerProvider,
+    LoggingHandler,
+)
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from azure.monitor.opentelemetry.exporter import AzureMonitorLogExporter
 
 from quart import (
     Blueprint,
@@ -47,97 +56,80 @@ bp = Blueprint("routes", __name__, static_folder="static", template_folder="stat
 
 cosmos_db_ready = asyncio.Event()
 
-# Setup Logging
-def setup_logging():
-    connection_string = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+def setup_monitoring():
+    """
+    Configures OpenTelemetry for logging and tracing in Azure Application Insights.
+    """
+    connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    if not connection_string:
+        logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING is not set. Monitoring disabled.")
+        return
 
-    if connection_string:
-        handler = AzureLogHandler(connection_string=connection_string)
-        logger.addHandler(handler)
+    # Setup Tracing
+    tracer_provider = TracerProvider()
+    trace.set_tracer_provider(tracer_provider)  # Correct usage
+    tracer_provider.add_span_processor(
+        BatchSpanProcessor(AzureMonitorTraceExporter.from_connection_string(connection_string))
+    )
 
-        # Commenting out metrics exporter to disable performance counters
-        # metrics_exporter.new_metrics_exporter(connection_string=connection_string)
-    else:
-        logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING environment variable is not set")
+    # Setup Logging
+    log_exporter = AzureMonitorLogExporter.from_connection_string(connection_string)
+    logger_provider = LoggerProvider()
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
 
-# Setup Tracing (but keep it minimal)
-def setup_tracing():
-    global tracer
-    connection_string = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
-    
-    if connection_string:
-        tracer = Tracer(
-            exporter=AzureExporter(connection_string=connection_string),
-            sampler=ProbabilitySampler(1.0)
-        )
-        set_opencensus_tracer(tracer)
-    else:
-        logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING is not set. Tracing disabled.")
+    # Attach OpenTelemetry logging to Python's logging module
+    LoggingInstrumentor().instrument(set_logging_format=True)
+    logging_handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+    logging.getLogger().addHandler(logging_handler)
 
-# Middleware for lightweight tracing
-async def trace_request():
-    tracer = get_opencensus_tracer()
-    if tracer:
-        span = tracer.start_span(name=f"HTTP {request.method} {request.path}")
-        span.add_attribute("http.url", request.url)
-        span.add_attribute("http.method", request.method)
-        set_opencensus_tracer(tracer)  # Ensure the tracer is set in context
+    logging.info("✅ Monitoring (Logging + Tracing) initialized with OpenTelemetry")
 
-async def trace_response(response):
-    tracer = get_opencensus_tracer()
-    if tracer:
-        span = get_current_span()
-        if span:
-            span.add_attribute("http.status_code", response.status_code)
-            tracer.end_span()
-    return response
-
-# Create Quart App
 def create_app():
-    setup_logging()
-    setup_tracing()
+    setup_monitoring()
 
     app = Quart(__name__)
-    app.register_blueprint(bp)
-    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-    # Attach tracing middleware
-    app.before_request(trace_request)
-    app.after_request(trace_response)
+    # Apply OpenTelemetry ASGI Middleware (Auto Request & Exception Tracing)
+    app.asgi_app = OpenTelemetryMiddleware(app.asgi_app)
+
+    # Automatically instrument logging (adds trace IDs to logs)
+    LoggingInstrumentor().instrument(set_logging_format=True)
+
+    # Register the Blueprint
+    app.register_blueprint(bp)
 
     async def init():
         try:
             app.cosmos_conversation_client = await init_cosmosdb_client()
             cosmos_db_ready.set()
-        except Exception as e:
+        except Exception:
             logging.exception("Failed to initialize CosmosDB client")
             app.cosmos_conversation_client = None
-            raise e
+            raise  # Rethrow to ensure it's properly handled
 
-    # Ensure init runs before serving
     app.before_serving(init)
-
     return app
 
-# Quart Blueprint Route Example (Ensuring Errors are Logged)
 @bp.route("/test")
 async def test_route():
-    logging.info("Handling /test route")
+    logging.info("Handling /test route")  # Standard log
     return {"message": "Hello, Quart!"}
 
 @bp.route("/error")
 async def error_route():
-    logging.error("This is a simulated error", exc_info=True)
-    raise ValueError("Simulated error")
+    span = trace.get_current_span()  # Capture trace span
+    logging.error("This is a simulated error", exc_info=True)  # Log at ERROR level
+    span.record_exception(Exception("Simulated error"))  # Attach to trace
+    raise ValueError("Simulated error")  # Trigger exception
 
 @bp.route("/exception")
 async def test_exception():
+    span = trace.get_current_span()  # Capture trace span
     try:
         1 / 0  # This will cause a ZeroDivisionError
     except Exception as e:
-        logging.exception("Test exception occurred", exc_info=True)
+        logging.exception("Test exception occurred")  # Log with stack trace
+        span.record_exception(e)  # Attach exception to trace
         return {"error": "An intentional exception occurred"}, 500
 
 @bp.route("/")
