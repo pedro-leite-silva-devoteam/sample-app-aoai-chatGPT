@@ -7,21 +7,10 @@ import httpx
 import asyncio
 
 from quart import Quart, request
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
-from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter, AzureMonitorLogExporter
-from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.sdk._logs import (
-    LoggerProvider,
-    LoggingHandler,
-)
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from azure.monitor.opentelemetry.exporter import AzureMonitorLogExporter
-
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from quart import (
     Blueprint,
     Quart,
@@ -57,43 +46,21 @@ bp = Blueprint("routes", __name__, static_folder="static", template_folder="stat
 cosmos_db_ready = asyncio.Event()
 
 def setup_monitoring():
-    """
-    Configures OpenTelemetry for logging and tracing in Azure Application Insights.
-    """
+    
+    logger = logging.getLogger("quart.app")
+    logger.setLevel(logging.INFO)  # Adjust as needed
+
+    log_provider = LoggerProvider()
+    set_logger_provider(log_provider)
+
     connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
-    if not connection_string:
-        logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING is not set. Monitoring disabled.")
-        return
-
-    # Setup Tracing
-    tracer_provider = TracerProvider()
-    trace.set_tracer_provider(tracer_provider)  # Correct usage
-    tracer_provider.add_span_processor(
-        BatchSpanProcessor(AzureMonitorTraceExporter.from_connection_string(connection_string))
-    )
-
-    # Setup Logging
-    log_exporter = AzureMonitorLogExporter.from_connection_string(connection_string)
-    logger_provider = LoggerProvider()
-    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
-
-    # Attach OpenTelemetry logging to Python's logging module
-    LoggingInstrumentor().instrument(set_logging_format=True)
-    logging_handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
-    logging.getLogger().addHandler(logging_handler)
-
-    logging.info("✅ Monitoring (Logging + Tracing) initialized with OpenTelemetry")
+    exporter = AzureMonitorLogExporter(connection_string=connection_string)
+    log_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
 
 def create_app():
     setup_monitoring()
 
     app = Quart(__name__)
-
-    # Apply OpenTelemetry ASGI Middleware (Auto Request & Exception Tracing)
-    app.asgi_app = OpenTelemetryMiddleware(app.asgi_app)
-
-    # Automatically instrument logging (adds trace IDs to logs)
-    LoggingInstrumentor().instrument(set_logging_format=True)
 
     # Register the Blueprint
     app.register_blueprint(bp)
@@ -109,28 +76,6 @@ def create_app():
 
     app.before_serving(init)
     return app
-
-@bp.route("/test")
-async def test_route():
-    logging.info("Handling /test route")  # Standard log
-    return {"message": "Hello, Quart!"}
-
-@bp.route("/error")
-async def error_route():
-    span = trace.get_current_span()  # Capture trace span
-    logging.error("This is a simulated error", exc_info=True)  # Log at ERROR level
-    span.record_exception(Exception("Simulated error"))  # Attach to trace
-    raise ValueError("Simulated error")  # Trigger exception
-
-@bp.route("/exception")
-async def test_exception():
-    span = trace.get_current_span()  # Capture trace span
-    try:
-        1 / 0  # This will cause a ZeroDivisionError
-    except Exception as e:
-        logging.exception("Test exception occurred")  # Log with stack trace
-        span.record_exception(e)  # Attach exception to trace
-        return {"error": "An intentional exception occurred"}, 500
 
 @bp.route("/")
 async def index():
