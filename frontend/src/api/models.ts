@@ -18,6 +18,7 @@ export type Citation = {
   metadata: string | null
   chunk_id: string | null
   reindex_id: string | null
+  citation_info: CitationInfo
 }
 
 export type ToolMessageContent = {
@@ -156,3 +157,12 @@ export enum Feedback {
   Manipulative = 'manipulative',
   OtherHarmful = 'other_harmlful'
 }
+
+export type CitationInfo = {
+  filepath: string | null
+  url: string | null
+  source_uri: string | null
+  thumb_l: string | null
+  thumb_s: string | null
+}
+

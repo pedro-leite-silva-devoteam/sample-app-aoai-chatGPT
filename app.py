@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import logging
+from typing import List
 import uuid
 import httpx
 import asyncio
@@ -29,6 +30,7 @@ from azure.identity.aio import (
 from backend.auth.auth_utils import get_authenticated_user_details
 from backend.security.ms_defender_utils import get_msdefender_user_json
 from backend.history.cosmosdbservice import CosmosConversationClient
+from backend.storage.storagetableservice import StorageTablesClient
 from backend.settings import (
     app_settings,
     MINIMUM_SUPPORTED_AZURE_OPENAI_PREVIEW_API_VERSION
@@ -72,10 +74,80 @@ def create_app():
         except Exception:
             logging.exception("Failed to initialize CosmosDB client")
             app.cosmos_conversation_client = None
-            raise  # Rethrow to ensure it's properly handled
+            raise
+
+        try:
+            app.storage_tables_client = await init_storage_tables_client()
+        except Exception:
+            logging.exception("Failed to initialize StorageTablesClient")
+            app.storage_tables_client = None
+            raise
 
     app.before_serving(init)
     return app
+
+@bp.route("/query_uri_by_blob_file_name/<file_name>")
+async def query_uri_by_blob_file_name(file_name: str):
+    if not current_app.storage_tables_client:
+        return jsonify({"error": "StorageTablesClient not initialized"}), 500
+
+    try:
+        result = await current_app.storage_tables_client.query_by_blob_file_name(file_name)
+
+        if not result:
+            return jsonify({"error": f"No data found for file name: {file_name}"}), 404
+        
+        entity = result[0]
+        return jsonify({"source_uri": entity.get('SourceURI')}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/api/citation-info", methods=["POST"])
+async def get_citation_info():
+    
+    data = await request.get_json()
+
+    if not data or 'filepaths' not in data:
+        return jsonify({"error": "Missing 'filepaths' in the request body"}), 400
+
+    filepaths: List[str] = data['filepaths']
+
+    if not filepaths:
+        return jsonify({"error": "No file paths provided"}), 400
+
+    if not current_app.storage_tables_client:
+        return jsonify({"error": "StorageTablesClient not initialized"}), 500
+
+    try:
+        citation_info_list = []
+
+        for filepath in filepaths:
+            result = await current_app.storage_tables_client.query_by_blob_file_name(filepath)
+
+            if result:
+                entity = result[0]
+                citation_info_list.append({
+                    "filepath": filepath,
+                    "url": entity.get('BlobUrl', ''),
+                    "source_uri": entity.get('SourceURI', ''),
+                    "thumb_l": entity.get('ThumbL', ''),
+                    "thumb_s": entity.get('ThumbS', '')
+                })
+            else:
+                citation_info_list.append({
+                    "filepath": filepath,
+                    "url": "",
+                    "source_uri": "",
+                    "thumb_l": "",
+                    "thumb_s": ""
+                })
+
+        return jsonify(citation_info_list), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @bp.route("/")
 async def index():
@@ -184,7 +256,6 @@ async def init_openai_client():
         azure_openai_client = None
         raise e
 
-
 async def init_cosmosdb_client():
     cosmos_conversation_client = None
     if app_settings.chat_history:
@@ -216,6 +287,12 @@ async def init_cosmosdb_client():
 
     return cosmos_conversation_client
 
+async def init_storage_tables_client():
+    try:
+        return StorageTablesClient()
+    except Exception as e:
+        logging.exception("Failed to initialize StorageTablesClient", e)
+        raise e
 
 def prepare_model_args(request_body, request_headers):
     request_messages = request_body.get("messages", [])

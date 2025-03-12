@@ -1,12 +1,42 @@
 import { cloneDeep } from 'lodash'
 
-import { AskResponse, Citation } from '../../api'
+import { AskResponse, Citation, CitationInfo } from '../../api'
 
 export type ParsedAnswer = {
   citations: Citation[]
   markdownFormatText: string,
   generated_chart: string | null
 } | null
+
+const updateCitationInfo = async (filteredCitations: Citation[]) => {
+  const filepaths = filteredCitations.map(citation => citation.filepath).filter(filepath => filepath !== null);
+
+  try {
+    const response = await fetch('/api/citation-info', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ filepaths }),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch citation info');
+      return;
+    }
+
+    const citationInfoArray: CitationInfo[] = await response.json();
+
+    filteredCitations.forEach(citation => {
+      const citationInfo = citationInfoArray.find(info => info.filepath === citation.filepath);
+      if (citationInfo) {
+        citation.citation_info = citationInfo;
+      }
+    });
+  } catch (error) {
+    console.error('Error updating citation info:', error);
+  }
+};
 
 export const enumerateCitations = (citations: Citation[]) => {
   const filepathMap = new Map()
@@ -44,7 +74,8 @@ export function parseAnswer(answer: AskResponse): ParsedAnswer {
   })
 
   filteredCitations = enumerateCitations(filteredCitations)
-
+  updateCitationInfo(filteredCitations);
+  
   return {
     citations: filteredCitations,
     markdownFormatText: answerText,
