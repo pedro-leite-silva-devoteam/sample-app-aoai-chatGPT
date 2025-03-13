@@ -133,15 +133,7 @@ async def get_citation_info():
                     "url": entity.get('BlobUrl', ''),
                     "source_uri": entity.get('SourceURI', ''),
                     "thumb_l": entity.get('ThumbL', ''),
-                    "thumb_s": entity.get('ThumbS', '')
-                })
-            else:
-                citation_info_list.append({
-                    "filepath": filepath,
-                    "url": "",
-                    "source_uri": "",
-                    "thumb_l": "",
-                    "thumb_s": ""
+                    "thumb_s": "https://stdevoboteu001.blob.core.windows.net/devobot-initial-documents-new-thumbs-s/devoteam_com_expert-view_generative-ai-for-ceos-drive-transformation__s.png" #entity.get('ThumbS', '')
                 })
 
         return jsonify(citation_info_list), 200
@@ -157,19 +149,15 @@ async def index():
         favicon=app_settings.ui.favicon
     )
 
-
 @bp.route("/favicon.ico")
 async def favicon():
     return await bp.send_static_file("favicon.ico")
-
 
 @bp.route("/assets/<path:path>")
 async def assets(path):
     return await send_from_directory("static/assets", path)
 
-
 USER_AGENT = "GitHubSampleWebApp/AsyncAzureOpenAI/1.0.0"
-
 
 # Frontend Settings via Environment Variables
 frontend_settings = {
@@ -500,7 +488,6 @@ async def conversation():
 
     return await conversation_internal(request_json, request.headers)
 
-
 @bp.route("/frontend_settings", methods=["GET"])
 def get_frontend_settings():
     try:
@@ -508,7 +495,6 @@ def get_frontend_settings():
     except Exception as e:
         logging.exception("Exception in /frontend_settings")
         return jsonify({"error": str(e)}), 500
-
 
 ## Conversation History API ##
 @bp.route("/history/generate", methods=["POST"])

@@ -1,6 +1,6 @@
 import { cloneDeep } from 'lodash'
 
-import { AskResponse, Citation } from '../../api' // Ensure this path matches the location of your types
+import { AskResponse, Citation, CitationInfo } from '../../api' // Ensure this path matches the location of your types
 
 import { enumerateCitations, parseAnswer, ParsedAnswer } from './AnswerParser' // Update the path accordingly
 
@@ -14,7 +14,8 @@ const sampleCitations: Citation[] = [
     url: null,
     metadata: null,
     chunk_id: null,
-    reindex_id: null
+    reindex_id: null,
+    citation_info: null
   },
   {
     id: 'doc2',
@@ -25,7 +26,8 @@ const sampleCitations: Citation[] = [
     url: null,
     metadata: null,
     chunk_id: null,
-    reindex_id: null
+    reindex_id: null,
+    citation_info: null
   },
   {
     id: 'doc3',
@@ -36,7 +38,8 @@ const sampleCitations: Citation[] = [
     url: null,
     metadata: null,
     chunk_id: null,
-    reindex_id: null
+    reindex_id: null,
+    citation_info: null
   }
 ]
 

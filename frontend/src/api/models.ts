@@ -18,7 +18,7 @@ export type Citation = {
   metadata: string | null
   chunk_id: string | null
   reindex_id: string | null
-  citation_info: CitationInfo
+  citation_info: CitationInfo | null
 }
 
 export type ToolMessageContent = {

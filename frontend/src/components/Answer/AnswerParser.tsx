@@ -74,8 +74,10 @@ export function parseAnswer(answer: AskResponse): ParsedAnswer {
   })
 
   filteredCitations = enumerateCitations(filteredCitations)
-  updateCitationInfo(filteredCitations);
-  
+  if (filteredCitations.length > 0) {
+    updateCitationInfo(filteredCitations);
+  }
+
   return {
     citations: filteredCitations,
     markdownFormatText: answerText,
