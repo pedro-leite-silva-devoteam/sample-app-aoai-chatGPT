@@ -241,6 +241,17 @@ export const Answer = ({ answer, onCitationClicked, onExectResultClicked }: Prop
       )
     }
   }
+
+  const [hoveredCitation, setHoveredCitation] = useState<Citation | null>(null);
+
+  const handleMouseEnter = (citation: Citation) => {
+    setHoveredCitation(citation);
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredCitation(null);
+  };
+
   return (
     <>
       <Stack className={styles.answerContainer} tabIndex={0}>
@@ -353,19 +364,38 @@ export const Answer = ({ answer, onCitationClicked, onExectResultClicked }: Prop
         {chevronIsExpanded && (
           <div className={styles.citationWrapper}>
             {parsedAnswer?.citations.map((citation, idx) => {
+              
+              const citationFilepath = createCitationFilepath(citation, ++idx);
+              const citationInfo = citation.citation_info;
+              
               return (
+
                 <span
-                  title={createCitationFilepath(citation, ++idx)}
-                  tabIndex={0}
-                  role="link"
-                  key={idx}
-                  onClick={() => onCitationClicked(citation)}
-                  onKeyDown={e => (e.key === 'Enter' || e.key === ' ' ? onCitationClicked(citation) : null)}
-                  className={styles.citationContainer}
-                  aria-label={createCitationFilepath(citation, idx)}>
-                  <div className={styles.citation}>{idx}</div>
-                  {createCitationFilepath(citation, idx, true)}
-                </span>
+                title={citationFilepath}
+                tabIndex={0}
+                role="link"
+                key={idx}
+                onClick={() => onCitationClicked(citation)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ' ? onCitationClicked(citation) : null)}
+                className={styles.citationContainer}
+                aria-label={citationFilepath}
+                onMouseEnter={() => handleMouseEnter(citation)}
+                onMouseLeave={handleMouseLeave}
+              >
+                <div className={styles.citation}>{idx}</div>
+                {citationFilepath}
+    
+                {/* Custom Tooltip with Hyperlink */}
+                {hoveredCitation === citation && citationInfo && (
+                  <div className={styles.tooltip}>
+                    <a href={citationInfo.source_uri || ''} target="_blank" rel="noopener noreferrer">
+                      {citationInfo.source_uri || 'Click for more info'}
+                    </a>
+                    <img src="https://stdevoboteu001.blob.core.windows.net/devobot-initial-documents-new-thumbs-s/devoteam_com_expert-view_generative-ai-for-ceos-drive-transformation__s.png" alt="Thumbnail" />
+                  </div>
+                )}
+              </span>
+
               )
             })}
           </div>

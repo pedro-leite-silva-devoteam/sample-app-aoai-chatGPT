@@ -9,7 +9,15 @@ export type ParsedAnswer = {
 } | null
 
 const updateCitationInfo = async (filteredCitations: Citation[]) => {
-  const filepaths = filteredCitations.map(citation => citation.filepath).filter(filepath => filepath !== null);
+  const filepaths = filteredCitations
+    .map(citation => citation.filepath)
+    .filter(filepath => filepath !== null);
+
+  // Early return if filepaths array is empty
+  if (filepaths.length === 0) {
+    console.log('No valid filepaths found, skipping citation info update.');
+    return;
+  }
 
   try {
     const response = await fetch('/api/citation-info', {

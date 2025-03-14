@@ -201,3 +201,21 @@ sup {
     margin-bottom: 5px;
   }
 }
+
+.tooltip {
+  position: absolute;
+  background-color: #333;
+  color: white;
+  padding: 5px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 999;
+}
+
+.citationContainer {
+  position: relative; /* Make the citation container the reference point for the tooltip */
+}
+
+.citationContainer:hover .tooltip {
+  display: block; /* Show the tooltip on hover */
+}
