@@ -371,7 +371,7 @@ export const Answer = ({ answer, onCitationClicked, onExectResultClicked }: Prop
               return (
 
                 <span
-                title={citationFilepath}
+                /*title={citationFilepath}*/
                 tabIndex={0}
                 role="link"
                 key={idx}
@@ -385,13 +385,16 @@ export const Answer = ({ answer, onCitationClicked, onExectResultClicked }: Prop
                 <div className={styles.citation}>{idx}</div>
                 {citationFilepath}
     
-                {/* Custom Tooltip with Hyperlink */}
+                {/* Custom Tooltip with Hyperlink in Image */}
                 {hoveredCitation === citation && citationInfo && (
                   <div className={styles.tooltip}>
                     <a href={citationInfo.source_uri || citationInfo.blob_url || '#'} target="_blank" rel="noopener noreferrer">
-                      {citationInfo.source_uri || 'Click for more info'}
+                      <img
+                        src={citationInfo.thumb_s || '/static/devoteam_rgb.png'}
+                        alt=""
+                        className={styles.tooltipImage}
+                      />
                     </a>
-                    <img src={citationInfo.thumb_s || '/static/devoteam_red_ball_02.png'} alt="Thumbnail" />
                   </div>
                 )}
               </span>
