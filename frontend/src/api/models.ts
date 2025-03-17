@@ -160,7 +160,7 @@ export enum Feedback {
 
 export type CitationInfo = {
   filepath: string | null
-  url: string | null
+  blob_url: string | null
   source_uri: string | null
   thumb_l: string | null
   thumb_s: string | null

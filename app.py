@@ -130,10 +130,10 @@ async def get_citation_info():
                 entity = result[0]
                 citation_info_list.append({
                     "filepath": filepath,
-                    "url": entity.get('BlobUrl', ''),
+                    "blob_url": entity.get('BlobURL', ''),
                     "source_uri": entity.get('SourceURI', ''),
-                    "thumb_l": entity.get('ThumbL', ''),
-                    "thumb_s": "https://stdevoboteu001.blob.core.windows.net/devobot-initial-documents-new-thumbs-s/devoteam_com_expert-view_generative-ai-for-ceos-drive-transformation__s.png" #entity.get('ThumbS', '')
+                    "thumb_l": entity.get('ThumbLargeURL', ''),
+                    "thumb_s": entity.get('ThumbSmallURL', '')
                 })
 
         return jsonify(citation_info_list), 200

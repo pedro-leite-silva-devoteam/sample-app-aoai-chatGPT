@@ -388,10 +388,10 @@ export const Answer = ({ answer, onCitationClicked, onExectResultClicked }: Prop
                 {/* Custom Tooltip with Hyperlink */}
                 {hoveredCitation === citation && citationInfo && (
                   <div className={styles.tooltip}>
-                    <a href={citationInfo.source_uri || ''} target="_blank" rel="noopener noreferrer">
+                    <a href={citationInfo.source_uri || citationInfo.blob_url || '#'} target="_blank" rel="noopener noreferrer">
                       {citationInfo.source_uri || 'Click for more info'}
                     </a>
-                    <img src="https://stdevoboteu001.blob.core.windows.net/devobot-initial-documents-new-thumbs-s/devoteam_com_expert-view_generative-ai-for-ceos-drive-transformation__s.png" alt="Thumbnail" />
+                    <img src={citationInfo.thumb_s || '/static/devoteam_red_ball_02.png'} alt="Thumbnail" />
                   </div>
                 )}
               </span>
