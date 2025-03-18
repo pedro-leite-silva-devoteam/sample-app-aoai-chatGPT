@@ -1,3 +1,22 @@
+# Devobot ChatGPT Assistant
+
+## 📌 About This Fork
+This repository is a fork of [sample-app-aoai-chatGPT](https://github.com/microsoft/sample-app-aoai-chatGPT), originally created by Microsoft under the MIT License.  
+The original README.md has been retained, and modifications are documented below.
+
+## 🔧 Modifications in This Fork
+- Completed Citation Info with thumbnails and UI display
+- Ignored env.json to prevent secrets from being committed
+- Initial attempt for Citation Info
+- Balanced logging
+- Simplified OpenTelemetry code
+- Added logging to Application Insights
+- Successfully deployed
+
+
+(Original README content follows below...)
+__________________________________
+
 # [Preview] Sample Chat App with AOAI
 
 This repo contains sample code for a simple chat webapp that integrates with Azure OpenAI. Note: some portions of the app use preview APIs.
